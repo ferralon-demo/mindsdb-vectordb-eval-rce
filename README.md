@@ -1,275 +1,83 @@
-<a name="readme-top"></a>
+# MindsDB: `eval()` on query values in vector-database and SharePoint handlers (CVE-2024-45846 to -45851)
 
-<div align="center">
-	<a href="https://pypi.org/project/MindsDB/" target="_blank"><img src="https://badge.fury.io/py/MindsDB.svg" alt="MindsDB Release"></a>
-	<a href="https://www.python.org/downloads/" target="_blank"><img src="https://img.shields.io/badge/python-3.8.x%7C%203.9.x%7C%203.10.x%7C%203.11.x-brightgreen.svg" alt="Python supported"></a>
-	<a href="https://ossrank.com/p/630"><img src="https://shields.io/endpoint?url=https://ossrank.com/shield/630"></a>
-	<img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/Mindsdb">
-	<a href="https://hub.docker.com/u/mindsdb" target="_blank"><img src="https://img.shields.io/docker/pulls/mindsdb/mindsdb" alt="Docker pulls"></a>
+Case study of six eval-injection advisories (CWE-94/95) in [mindsdb/mindsdb](https://github.com/mindsdb/mindsdb)
+(GitHub now resolves this name to `mindsdb/mindshub`), all fixed by one commit: integration handlers pass
+query-supplied strings to Python's builtin `eval`; the upstream fix replaces each call with `ast.literal_eval`.
 
-  <br />
-  <br />
+> **Demo only, not for use.** This repository is a case study built from unmodified snapshots of
+> [mindsdb/mindsdb](https://github.com/mindsdb/mindsdb) at two historical commits. It is not a fork and is not maintained. Do not install, deploy, or
+> depend on it: the `baseline` branch contains code affected by the advisories below.
 
-  <a href="https://github.com/mindsdb/mindsdb">
-    <img src="/docs/assets/mindsdb_logo.jpg" alt="MindsDB" width="300">
-  </a>
+**This branch: `baseline`** (tag `poe`): snapshot of `mindsdb/mindsdb` @ [`ff120b08f4`](https://github.com/mindsdb/mindsdb/commit/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c) (2024-07-23), the parent of the upstream fix commit, i.e. the last vulnerable state. The patched snapshot is on [`fix`](https://github.com/ferralon-demo/mindsdb-vectordb-eval-rce/tree/fix).
 
-  <p align="center">
-    <br />
-    <a href="https://www.mindsdb.com?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo">Website</a>
-    ·
-    <a href="https://docs.mindsdb.com?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo">Docs</a>
-    ·
-    <a href="https://mindsdb.com/joincommunity?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo">Community Slack</a>
-  </p>
-</div>
+## Advisories
 
-----------------------------------------
+All six: `mindsdb` < 24.7.4.1 (lower bound varies), CWE-94/CWE-95, "MindsDB Eval Injection vulnerability", fixed by
+commit [`11a4db792a`](https://github.com/mindsdb/mindsdb/commit/11a4db792ad36cf704f7307c7602128b17752c80)
+([PR #9533](https://github.com/mindsdb/mindsdb/pull/9533), "Replace eval with literal_eval", merged 2024-07-24).
 
-[MindsDB](https://mindsdb.com?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) is the platform for building AI from enterprise data. You can create, serve, and fine-tune models in real-time from your database, vector store, and application data.
- [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=The%20platform%20for%20building%20AI,%20from%20enterprise%20data&url=https://github.com/mindsdb/mindsdb&via=mindsdb&hashtags=ai,opensource)
+| CVE | GHSA | Query form (per advisory) | `eval` call at `baseline` (upstream `ff120b08f4`) |
+|---|---|---|---|
+| [CVE-2024-45846](https://nvd.nist.gov/vuln/detail/CVE-2024-45846) | [GHSA-wcjw-3v6p-4v3r](https://github.com/advisories/GHSA-wcjw-3v6p-4v3r) | `SELECT … WHERE`, Weaviate engine | `WeaviateDBHandler.select`, [`mindsdb/integrations/handlers/weaviate_handler/weaviate_handler.py:338`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/weaviate_handler/weaviate_handler.py#L338) |
+| [CVE-2024-45847](https://nvd.nist.gov/vuln/detail/CVE-2024-45847) | [GHSA-crmg-rp64-5cm3](https://github.com/advisories/GHSA-crmg-rp64-5cm3) | `UPDATE`, several vector-store engines | `VectorStoreHandler._dispatch_update`, [`mindsdb/integrations/libs/vectordatabase_handler.py:245`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/libs/vectordatabase_handler.py#L245) |
+| [CVE-2024-45848](https://nvd.nist.gov/vuln/detail/CVE-2024-45848) | [GHSA-9gq6-6936-885w](https://github.com/advisories/GHSA-9gq6-6936-885w) | `INSERT`, ChromaDB engine | `ChromaDBHandler.insert`, [`mindsdb/integrations/handlers/chromadb_handler/chromadb_handler.py:332`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/chromadb_handler/chromadb_handler.py#L332) |
+| [CVE-2024-45849](https://nvd.nist.gov/vuln/detail/CVE-2024-45849) | [GHSA-c85f-pcx6-2ghm](https://github.com/advisories/GHSA-c85f-pcx6-2ghm) | `INSERT` (list creation), SharePoint engine | `SharepointAPI.create_a_list`, [`mindsdb/integrations/handlers/sharepoint_handler/sharepoint_api.py:252`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/sharepoint_handler/sharepoint_api.py#L252) and [`:255`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/sharepoint_handler/sharepoint_api.py#L255) |
+| [CVE-2024-45850](https://nvd.nist.gov/vuln/detail/CVE-2024-45850) | [GHSA-v6g6-3cm3-vf6c](https://github.com/advisories/GHSA-v6g6-3cm3-vf6c) | `INSERT` (site column creation), SharePoint engine | `SharepointAPI.create_a_site_column`, [`sharepoint_api.py:413`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/sharepoint_handler/sharepoint_api.py#L413) |
+| [CVE-2024-45851](https://nvd.nist.gov/vuln/detail/CVE-2024-45851) | [GHSA-wf9g-c67g-h4ch](https://github.com/advisories/GHSA-wf9g-c67g-h4ch) | `INSERT` (list item creation), SharePoint engine | `SharepointAPI.create_an_item`, [`sharepoint_api.py:577`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/integrations/handlers/sharepoint_handler/sharepoint_api.py#L577) |
 
-## 📖 About us
+## Ingress at `baseline`
 
-MindsDB is the platform for building AI from enterprise data.
+The HTTP SQL endpoint: Flask-RESTX namespace `sql` ([`mindsdb/api/http/namespaces/configs/sql.py:3`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/api/http/namespaces/configs/sql.py#L3),
+registered at [`mindsdb/api/http/initialize.py:224`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/api/http/initialize.py#L224)); `@ns_conf.route("/query")`
+on class `Query` with handler `post` ([`mindsdb/api/http/namespaces/sql.py:22-30`](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/api/http/namespaces/sql.py#L22-L30)).
+`post` reads the JSON field `query` ([line 31](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/api/http/namespaces/sql.py#L31)) and calls
+`FakeMysqlProxy().process_query(query)` ([line 49](https://github.com/mindsdb/mindsdb/blob/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c/mindsdb/api/http/namespaces/sql.py#L49)).
 
-With MindsDB, you can deploy, serve, and fine-tune models in real-time, utilizing data from databases, vector stores, or applications, to build AI-powered apps - using universal tools developers already know.
+From `process_query`, a query reaches an integration handler through MindsDB's SQL planner and executor and
+handlers loaded per database engine at run time. This README does not assert a specific static call chain from
+the ingress to each `eval`; the advisories describe the query forms that reach them. The handlers are only
+active when the corresponding integration is installed (per the advisories).
 
-<p align="center">
-  <img src="/docs/assets/mindsdb_homepage_diagram.png"/>
-</p>
+## What the fix changes
 
-MindsDB integrates with numerous [data sources](https://docs.mindsdb.com/integrations/data-overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), including databases, vector stores, and applications, and popular [AI/ML frameworks](https://docs.mindsdb.com/integrations/ai-overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), including AutoML and LLMs. MindsDB connects data sources with AI/ML frameworks and automates routine workflows between them. By doing so, we bring data and AI together, enabling the intuitive implementation of customized AI systems.
+At `11a4db792a`, each `eval(...)` above is `ast.literal_eval(...)` on the same statement (lines shift by one
+where `import ast` was added): e.g. [`vectordatabase_handler.py:245`](https://github.com/mindsdb/mindsdb/blob/11a4db792ad36cf704f7307c7602128b17752c80/mindsdb/integrations/libs/vectordatabase_handler.py#L245),
+[`weaviate_handler.py:339`](https://github.com/mindsdb/mindsdb/blob/11a4db792ad36cf704f7307c7602128b17752c80/mindsdb/integrations/handlers/weaviate_handler/weaviate_handler.py#L339). No builtin `eval` call remains in
+the four changed files; the handlers and the ingress are unchanged.
 
-Learn more about [features and use cases of MindsDB here](https://docs.mindsdb.com/what-is-mindsdb?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
+## Provenance
 
-## 🚀 Get Started
+This is not a fork: a fresh repository whose code branches hold upstream source snapshots, with no upstream
+history and no upstream remote.
 
-To get started, install MindsDB locally via [Docker](https://docs.mindsdb.com/setup/self-hosted/docker?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) or [Docker Desktop](https://docs.mindsdb.com/setup/self-hosted/docker-desktop?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), following the instructions in linked doc pages.
+| Branch | Tag | Upstream commit | Date | Snapshot commit | Snapshot tree |
+|---|---|---|---|---|---|
+| `baseline` | `poe` | [`ff120b08f4`](https://github.com/mindsdb/mindsdb/commit/ff120b08f45a4b15a313f7723ea0f2d8aa4be87c) | 2024-07-23 | `8e6ff4c1ba8fb72eaad7a8e195ef2a20647d491b` | `4f91fdb2b0aaa8bce5464e868c4757c06d4452b1` |
+| `fix` | `pone` | [`11a4db792a`](https://github.com/mindsdb/mindsdb/commit/11a4db792ad36cf704f7307c7602128b17752c80) | 2024-07-24 | `4471ebcf4a3507288da6f5a731beaaeaeed6081f` | `2d55a54d85980599cd8f163b17fd5e4c6ede119e` |
 
-MindsDB enhances SQL syntax to enable seamless development and deployment of AI-powered applications. Furthermore, users can interact with MindsDB not only via [SQL API](https://docs.mindsdb.com/mindsdb_sql/overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) but also via [REST APIs](https://docs.mindsdb.com/rest/overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), [Python SDK](https://docs.mindsdb.com/sdks/python/overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), [JavaScript SDK](https://docs.mindsdb.com/sdks/javascript/overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo), and [MongoDB-QL](https://docs.mindsdb.com/sdks/mongo/mindsdb-mongo-ql-overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
+Each snapshot commit is the upstream tree at that commit with one change: `.github/workflows/` (9 files) is
+removed so that upstream CI does not run here. No other file is added, removed, or edited. The `fix` snapshot's
+parent is the `baseline` snapshot, so the diff between the two snapshot commits
+([compare](https://github.com/ferralon-demo/mindsdb-vectordb-eval-rce/compare/8e6ff4c1ba8fb72eaad7a8e195ef2a20647d491b...4471ebcf4a3507288da6f5a731beaaeaeed6081f)) is exactly the upstream fix commit's diff. On each code branch, a second
+commit replaces upstream's `README.md` with a branch-specific version of this file; upstream's README is in the snapshot commit.
 
-| 🎯  Solutions                 | ⚙️ SQL Query Examples |
-|---------------------------|-----------|
-| 🤖 [Fine-Tuning](https://docs.mindsdb.com/sql/api/finetune#example-3-openai-model?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)            |  <code> FINETUNE mindsdb.hf_model FROM postgresql.table; </code>  |
-| 📚 [Knowledge Base](https://docs.mindsdb.com/agents/knowledge-bases?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)         | <code> CREATE KNOWLEDGE_BASE my_knowledge FROM (SELECT contents FROM drive.files); </code> |
-| 🔍 [Semantic Search](https://docs.mindsdb.com/integrations/ai-engines/rag?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)        |  <code> SELECT * FROM rag_model WHERE question='What product is best for treating a cold?';  </code>   |
-| ⏱️ [Real-Time Forecasting](https://docs.mindsdb.com/sql/tutorials/eeg-forecasting?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) | <code> SELECT * FROM binance.trade_data WHERE symbol = 'BTCUSDT'; </code> |
-| 🕵️ [Agents](https://docs.mindsdb.com/agents/agent?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)                | <code> CREATE AGENT my_agent USING model='chatbot_agent', skills = ['knowledge_base']; </code>    |
-| 💬 [Chatbots](https://docs.mindsdb.com/agents/chatbot?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)               |  <code> CREATE CHATBOT slack_bot USING database='slack',agent='customer_support'; </code>|
-| ⏲️ [Time Driven Automation](https://docs.mindsdb.com/sql/create/jobs?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)      |  <code> CREATE JOB twitter_bot ( <sql_query1>, <sql_query2> ) START '2023-04-01 00:00:00';   </code>           |
-| 🔔 [Event Driven Automation](https://docs.mindsdb.com/sql/create/trigger?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo)      | <code> CREATE TRIGGER data_updated ON mysql.customers_data (sql_code)           |
+To check a snapshot against upstream from a clone of this repository:
 
-## 💡 Examples
-
-MindsDB enables you to deploy AI/ML models, send predictions to your application, and automate AI workflows.
-
-[Discover more tutorials and use cases here](https://docs.mindsdb.com/use-cases/overview?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-### AI Workflow Automation
-
-This category of use cases involves tasks that get data from a data source, pass it through an AI/ML model, and write the output to a data destination.
-
-<p align="center">
-  <img src="/docs/assets/ai_workflow_automation.png"/>
-</p>
-
-Common use cases are anomaly detection, data indexing/labeling/cleaning, and data transformation.
-
-This example showcases the data enrichment flow, where input data comes from a PostgreSQL database and is passed through an OpenAI model to generate new content which is saved into a data destination.
-
-We take customer reviews from a PostgreSQL database. Then, we deploy an OpenAI model that analyzes all customer reviews and assigns sentiment values. Finally, to automate the workflow for incoming customer reviews, we create a job that generates and saves AI output into a data destination.
-
-```sql
--- Step 1. Connect a data source to MindsDB
-CREATE DATABASE data_source
-WITH ENGINE = "postgres",
-PARAMETERS = {
-    "user": "demo_user",
-    "password": "demo_password",
-    "host": "samples.mindsdb.com",
-    "port": "5432",
-    "database": "demo",
-    "schema": "demo_data"
-};
-
-SELECT *
-FROM data_source.amazon_reviews_job;
-
--- Step 2. Deploy an AI model
-CREATE ML_ENGINE openai_engine
-FROM openai
-USING
-    openai_api_key = 'your-openai-api-key';
-
-CREATE MODEL sentiment_classifier
-PREDICT sentiment
-USING
-    engine = 'openai_engine',
-    model_name = 'gpt-4',
-    prompt_template = 'describe the sentiment of the reviews
-						strictly as "positive", "neutral", or "negative".
-						"I love the product":positive
-						"It is a scam":negative
-						"{{review}}.":';
-
-DESCRIBE sentiment_classifier;
-
--- Step 3. Join input data with AI model to get AI output
-SELECT input.review, output.sentiment
-FROM data_source.amazon_reviews_job AS input
-JOIN sentiment_classifier AS output;
-
--- Step 4. Automate this workflow to accomodate real-time and dynamic data
-CREATE DATABASE data_destination
-WITH ENGINE = "engine-name",      -- choose the data source you want to connect to save AI output
-PARAMETERS = {                    -- list of available data sources: https://docs.mindsdb.com/integrations/data-overview
-    "key": "value",
-	...
-};
-
-CREATE JOB ai_automation_flow (
-	INSERT INTO data_destination.ai_output (
-		SELECT input.created_at,
-			   input.product_name,
-			   input.review,
-			   output.sentiment
-		FROM data_source.amazon_reviews_job AS input
-		JOIN sentiment_classifier AS output
-		WHERE input.created_at > LAST
-	);
-);
+```sh
+git fetch https://github.com/mindsdb/mindsdb ff120b08f45a4b15a313f7723ea0f2d8aa4be87c
+git diff --stat FETCH_HEAD 8e6ff4c1ba8fb72eaad7a8e195ef2a20647d491b   # lists only .github/workflows/*
 ```
 
-### AI System Deployment
+## Licence
 
-This category of use cases involves creating AI systems composed of multiple connected parts, including various AI/ML models and data sources, and exposing such AI systems via APIs.
+MindsDB's licensing is mixed and is reproduced unchanged. The root `LICENSE` is kept verbatim, preamble included:
+it applies the **Elastic License 2.0** to MindsDB Core and, by default, to any file without a closer licence, and
+the **MIT License** to `mindsdb/integrations/`, which carries its own `mindsdb/integrations/LICENSE` (also kept
+verbatim). The Elastic License 2.0 is a source-available licence, not an OSI-approved open-source licence. Anyone
+who receives a copy of any part of this repository receives these terms with it in `LICENSE`.
 
-<p align="center">
-  <img src="/docs/assets/ai_system_deployment.png"/>
-</p>
-
-Common use cases are agents and assistants, recommender systems, forecasting systems, and semantic search.
-
-This example showcases AI agents, a feature developed by MindsDB. AI agents can be assigned certain skills, including text-to-SQL skills and knowledge bases. Skills provide an AI agent with input data that can be in the form of a database, a file, or a website.
-
-We create a text-to-SQL skill based on the car sales dataset and deploy a conversational model, which are both components of an agent. Then, we create an agent and assign this skill and this model to it. This agent can be queried to ask questions about data stored in assigned skills.
-
-```sql
--- Step 1. Connect a data source to MindsDB
-CREATE DATABASE data_source
-WITH ENGINE = "postgres",
-PARAMETERS = {
-    "user": "demo_user",
-    "password": "demo_password",
-    "host": "samples.mindsdb.com",
-    "port": "5432",
-    "database": "demo",
-    "schema": "demo_data"
-};
-
-SELECT *
-FROM data_source.car_sales;
-
--- Step 2. Create a skill
-CREATE SKILL my_skill
-USING
-    type = 'text2sql',
-    database = 'data_source',
-    tables = ['car_sales'],
-    description = 'car sales data of different car types';
-
-SHOW SKILLS;
-
--- Step 3. Deploy a conversational model
-CREATE ML_ENGINE langchain_engine
-FROM langchain
-USING
-      openai_api_key = 'your openai-api-key';
-      
-CREATE MODEL my_conv_model
-PREDICT answer
-USING
-    engine = 'langchain_engine',
-    model_name = 'gpt-4',
-    mode = 'conversational',
-    user_column = 'question' ,
-    assistant_column = 'answer',
-    max_tokens = 100,
-    temperature = 0,
-    verbose = True,
-    prompt_template = 'Answer the user input in a helpful way';
-
-DESCRIBE my_conv_model;
-
--- Step 4. Create an agent
-CREATE AGENT my_agent
-USING
-    model = 'my_conv_model',
-    skills = ['my_skill'];
-
-SHOW AGENTS;
-
--- Step 5. Query an agent
-SELECT *
-FROM my_agent
-WHERE question = 'what is the average price of cars from 2018?';
-
-SELECT *
-FROM my_agent
-WHERE question = 'what is the max mileage of cars from 2017?';
-
-SELECT *
-FROM my_agent
-WHERE question = 'what percentage of sold cars (from 2016) are automatic/semi-automatic/manual cars?';
-
-SELECT *
-FROM my_agent
-WHERE question = 'is petrol or diesel more common for cars from 2019?';
-
-SELECT *
-FROM my_agent
-WHERE question = 'what is the most commonly sold model?';
-```
-
-[Agents are accessible via API endpoints](https://docs.mindsdb.com/rest/agents/agent?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-## 🤝 Contribute
-
-If you’d like to contribute to MindsDB, install MindsDB for development following [this instruction](https://docs.mindsdb.com/contribute/install?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-You’ll find the [contribution guide here](https://docs.mindsdb.com/contribute/contribute?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-We are always open to suggestions, so feel free to open new issues with your ideas, and we can guide you!
-
-This project is released with a [Contributor Code of Conduct](https://github.com/mindsdb/mindsdb/blob/main/CODE_OF_CONDUCT.md). By participating in this project, you agree to follow its terms.
-
-Also, check out the [rewards and community programs here](https://mindsdb.com/community?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-## 🤍 Support
-
-If you find a bug, please submit an [issue on GitHub here](https://github.com/mindsdb/mindsdb/issues/new/choose).
-
-Here is how you can get community support:
-
-* Post a question at [MindsDB Slack Community](https://mindsdb.com/joincommunity?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-* Ask for help at our [GitHub Discussions](https://github.com/mindsdb/mindsdb/discussions).
-* Ask a question at [Stackoverflow](https://stackoverflow.com/questions/tagged/mindsdb) with a MindsDB tag.
-
-If you need commercial support, please [contact the MindsDB team](https://mindsdb.com/contact?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo).
-
-## 💚 Current contributors
-
-<a href="https://github.com/mindsdb/mindsdb/graphs/contributors">
-  <img src="https://contributors-img.web.app/image?repo=mindsdb/mindsdb" />
-</a>
-
-Made with [contributors-img](https://contributors-img.web.app).
-
-## 🔔 Subscribe to updates
-
-Join our [Slack community](https://mindsdb.com/joincommunity?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) and subscribe to the monthly [Developer Newsletter](https://mindsdb.com/newsletter?utm_medium=community&utm_source=github&utm_campaign=mindsdb%20repo) to get product updates, information about MindsDB events and contests, and useful content, like tutorials.
-
-## ⚖️ License 
-
-For detailed licensing information, please refer to the [LICENSE file](https://github.com/mindsdb/mindsdb/blob/master/LICENSE).
+**Modification notice (Elastic License 2.0, "Notices"): this is a modified copy of MindsDB.** On 2026-10-07 the
+directory `.github/workflows/` (9 files) was removed from both snapshots so that upstream CI does not run here.
+That is the only change to MindsDB's files. In addition, this `README.md` replaces upstream's `README.md` in a
+separate commit on each branch; upstream's README is unchanged in the snapshot commit. No source file was added,
+removed, or edited.
