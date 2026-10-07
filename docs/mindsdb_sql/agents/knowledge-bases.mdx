@@ -1,0 +1,141 @@
+---
+title: Knowledge Base
+sidebarTitle: Knowledge Base
+---
+
+A knowledge base is a batteries-included RAG system that you can create and insert data into, as well as query as if it was a table.
+
+```sql
+-- Create a knowledge base that
+-- By default, it uses the OpenAI embedding model and the ChromaDB vector store
+CREATE KNOWLEDGE_BASE world_news_kb;
+
+-- Add data into the knowledge base
+INSERT INTO world_news_kb (
+  SELECT id, text as content FROM web_news
+);
+
+-- Query the knowledge base
+SELECT *
+FROM world_news_kb
+WHERE content = "Best AI Startups in SF?"
+LIMIT 10;
+```
+
+Internally, it uses a vector store and an embedding model. By default, it uses the ChromaDB vector store and the OpenAI embedding model. However, you can define a vector store and an embedding model as you see fit.
+
+## Syntax
+
+Here is a general syntax for creating a knowledge base:
+
+```sql
+CREATE KNOWLEDGE_BASE my_kb
+[USING
+   [model = embedding_model,]
+   [storage = vector_database.storage_table,]
+   [metadata_columns = ['date', 'creator'],]
+   [content_columns = ['review'],]
+   [id_column='index'];]
+```
+
+Where the following parameters are optional:
+
+- `model` can store an embedding model.
+- `storage` can store a table from a vector database.
+- `metadata_columns` can list columns to store metadata (if not set, there are no metadata columns).
+- `content_columns` can list columns to store content (if not set, all columns are content).
+- `id_column` can list a column to store a unique identitifier, which is `id` by default.
+
+## Example
+
+Let's look at an step-by-step example of how to define a knowledge base.
+
+<p align="center">
+  <img src="https://docs.google.com/drawings/d/e/2PACX-1vTVmUqhoFXLF3ncL0NWwgdPjI7Hj19f-5xU8ED31ntYvlsTM3poM9zZKwcrEwzvxJrOhl2raIFKWlsp/pub?w=1342&h=681" />
+</p>
+
+Here is how you build a knowledge base specifying the embedding model and the vector store.
+
+Create an embedding model for the knowledge base using [OpenAI](/integrations/ai-engines/openai) or [LangChain](https://github.com/mindsdb/mindsdb/tree/main/mindsdb/integrations/handlers/langchain_embedding_handler) as an engine.
+
+```sql
+CREATE ML_ENGINE embedding
+FROM langchain_embedding;
+
+CREATE MODEL embedding_model
+PREDICT embeddings
+USING
+	engine = "embedding",
+	class = "openai",
+	openai_api_key = "your_api_key_here",
+	input_columns = ["content"];
+```
+
+Create a connection to the vector store.
+
+```sql
+CREATE DATABASE chroma_dev_local
+WITH ENGINE = "chromadb",
+PARAMETERS = {
+	"persist_directory": "persist path here"
+};
+```
+
+This example uses the `world_news_with_ids` table that contains the `id` and `content` columns.
+
+Create an index in the vector store and insert one example point.
+
+```sql
+CREATE TABLE chroma_dev_local.world_news_index (
+	SELECT content, embeddings FROM embedding_model
+	WHERE content = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tristique sollicitudin nibh sit amet commodo nulla. Risus sed vulputate odio ut enim blandit volutpat. Suspendisse ultrices gravida dictum fusce ut placerat orci. Eget nulla facilisi etiam dignissim diam. Aenean euismod elementum nisi quis eleifend quam. Ac placerat vestibulum lectus mauris ultrices eros in. Sed turpis tincidunt id aliquet risus feugiat in ante metus. Pellentesque habitant morbi tristique senectus et netus. Imperdiet massa tincidunt nunc pulvinar sapien et ligula. Leo in vitae turpis massa sed elementum tempus egestas. Aliquam malesuada bibendum arcu vitae elementum curabitur. Sit amet tellus cras adipiscing. Enim ut tellus elementum sagittis vitae et leo. Donec pretium vulputate sapien nec."
+);
+```
+
+Query the vector store:
+
+```sql
+SELECT * FROM chroma_dev_local.world_news_index;
+```
+
+Create a knowledge base using all components defined above.
+
+```sql
+CREATE KNOWLEDGE_BASE world_news_kb
+USING
+	model = embedding_model,
+	storage = chroma_dev_local.world_news_index;
+```
+
+Here is how you can automate adding content to this knowledge base every time new data becomes available:
+
+```sql
+CREATE JOB keep_knowledge_base_up_to_date AS (
+
+    INSERT INTO world_news_kb (
+        SELECT id, text AS content
+        FROM world_news_with_ids
+        WHERE id > LAST
+    );
+
+) EVERY second;
+```
+
+<Note>
+The `LAST` keyword enables the quey to select only the newly added data. Learn more about the [`LAST` keyword here](/mindsdb_sql/sql/create/jobs#last).
+</Note>
+
+Query the knowledge base as below.
+
+```sql
+SELECT *
+FROM world_news_kb;
+
+SELECT *
+FROM world_news_kb
+WHERE content = "YouTube" LIMIT 1;
+
+SELECT *
+FROM world_news_kb
+WHERE content = "Canada and Google" LIMIT 1;
+```
